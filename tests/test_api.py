@@ -2,35 +2,12 @@ import pytest
 import requests
 import uuid
 import time
-from jsonschema import validate, ValidationError
 
-# схемы минимальные для проверки ключевых полей
-ITEM_SCHEMA = {
-    "type": ["object", "array"],
-    "oneOf": [
-        {"type": "object",
-         "properties": {
-            "id": {"type": "string"},
-            "sellerId": {"type": "number"},
-            "name": {"type": "string"},
-            "price": {"type": "number"},
-            "statistics": {"type": "object"},
-            "createdAt": {"type": "string"}
-         },
-         "required": ["id", "sellerId", "name", "price", "createdAt"]
-        },
-        {"type": "array"}
-    ]
-}
-
-STAT_SCHEMA = {
-    "type": ["array", "object"],
-}
 
 @pytest.mark.dependency()
 def test_create_item_positive(base_url, headers, seller_id, created_items):
     """
-    TC-001: Create item — valid payload
+    TC-001: Создание объявления с корректным телом запроса
     """
     url = f"{base_url}/api/1/item"
 
@@ -42,108 +19,161 @@ def test_create_item_positive(base_url, headers, seller_id, created_items):
     }
 
     resp = requests.post(url, json=payload, headers=headers, timeout=10)
-
-    # API возвращает {"status": "Сохранили объявление - <uuid>"}
-    assert resp.status_code == 200
+    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
 
     body = resp.json()
-    assert "status" in body, "API returned unexpected format"
+    assert "status" in body, "Missing 'status' field in response"
 
-    # Извлекаем ID из строки вида: "Сохранили объявление - <uuid>"
-    status = body["status"]
-    assert " - " in status, "Unexpected status format"
-    
-    item_id = status.split(" - ")[1].strip()
+    # ожидаем строку вида "Сохранили объявление - <uuid>"
+    parts = body["status"].split(" - ")
+    assert len(parts) == 2, f"Unexpected status format: {body['status']}"
 
-    # сохраняем ID для других тестов
+    item_id = parts[1].strip()
+
+    # Проверка корректности uuid
+    try:
+        uuid.UUID(item_id)
+    except ValueError:
+        pytest.fail(f"Returned id is not valid UUID: {item_id}")
+
     created_items.append(item_id)
 
-    # Проверяем корректность UUID
-    assert len(item_id) > 0
 
 @pytest.mark.dependency(depends=["test_create_item_positive"])
 def test_get_item_by_id(base_url, headers, created_items):
     """
-    TC-002: Get item by id
+    TC-002: Получение объявления по ID
     """
-    assert created_items, "No created item id available"
     item_id = created_items[0]
     url = f"{base_url}/api/1/item/{item_id}"
+
     resp = requests.get(url, headers=headers, timeout=10)
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+    assert resp.status_code == 200
+
     body = resp.json()
-    # API может возвращать массив или объект — допускаем оба варианта
+
+    # API может вернуть объект или массив из одного объекта
     if isinstance(body, list):
-        assert any((it.get("id") == item_id) for it in body)
+        assert any(obj.get("id") == item_id for obj in body), "Item not found in returned list"
     else:
-        assert body.get("id") == item_id
+        assert body.get("id") == item_id, f"Expected id={item_id}, got {body.get('id')}"
+
 
 @pytest.mark.dependency(depends=["test_create_item_positive"])
 def test_get_items_by_seller(base_url, headers, created_items, seller_id):
     """
-    TC-003: Get items by sellerID
+    TC-003: Получение всех объявлений продавца
     """
     url = f"{base_url}/api/1/{seller_id}/item"
     resp = requests.get(url, headers=headers, timeout=10)
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+    assert resp.status_code == 200
+
     body = resp.json()
     assert isinstance(body, list), "Expected list of items"
-    # Найти хотя бы одно объявление с sellerId равным seller_id
-    assert any((it.get("sellerId") == seller_id or it.get("sellerID") == seller_id) for it in body), \
-        f"No items found for seller {seller_id}"
+
+    # хотя бы одно объявление должно принадлежать seller_id
+    assert any(
+        it.get("sellerId") == seller_id or it.get("sellerID") == seller_id
+        for it in body
+    ), f"No items found for seller {seller_id}"
+
 
 @pytest.mark.dependency(depends=["test_create_item_positive"])
 def test_get_statistic_by_id(base_url, headers, created_items):
     """
-    TC-004: Get statistic by item id
+    TC-004: Получение статистики объявления по ID
     """
-    assert created_items, "No created item id available"
     item_id = created_items[0]
     url = f"{base_url}/api/1/statistic/{item_id}"
+
     resp = requests.get(url, headers=headers, timeout=10)
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+    assert resp.status_code == 200
+
     body = resp.json()
-    # допускаем как массив, так и объект
-    assert isinstance(body, (list, dict))
-    # при массиве — проверим что есть числовые поля
-    if isinstance(body, list) and body:
-        first = body[0]
-        assert any(k in first for k in ("likes", "viewCount", "contacts"))
-    elif isinstance(body, dict):
-        assert any(k in body for k in ("likes", "viewCount", "contacts"))
+    assert isinstance(body, (dict, list)), "Unexpected response type"
+
+    # Проверяем наличие ключей статистики
+    expected_keys = {"likes", "viewCount", "contacts"}
+
+    if isinstance(body, dict):
+        assert expected_keys & body.keys(), "Statistic fields missing"
+    elif isinstance(body, list) and body:
+        assert expected_keys & body[0].keys(), "Statistic fields missing in list item"
+
 
 def test_get_nonexistent_item(base_url, headers):
     """
-    TC-006: Get non-existent item
+    TC-006: Запрос объявления с несуществующим ID
     """
     fake_id = str(uuid.uuid4())
     url = f"{base_url}/api/1/item/{fake_id}"
+
     resp = requests.get(url, headers=headers, timeout=10)
-    assert resp.status_code in (400, 404), f"Expected 400 or 404 for non-existent id, got {resp.status_code}"
+    assert resp.status_code in (400, 404), f"Unexpected status code: {resp.status_code}"
+
 
 def test_create_item_invalid_payload(base_url, headers):
     """
-    TC-007: Create item — invalid body (empty)
+    TC-007: Создание объявления с пустым телом запроса
     """
     url = f"{base_url}/api/1/item"
+
     resp = requests.post(url, data="", headers=headers, timeout=10)
-    assert resp.status_code == 400, f"Expected 400 for invalid payload, got {resp.status_code}. Body: {resp.text}"
+    assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
+
 
 def test_get_items_by_invalid_seller(base_url, headers):
     """
-    TC-008: Get items by invalid sellerID
+    TC-008: Получение объявлений по некорректному sellerID
     """
     invalid_seller = 0
     url = f"{base_url}/api/1/{invalid_seller}/item"
-    resp = requests.get(url, headers=headers, timeout=10)
-    assert resp.status_code in (200, 400, 404), f"Expected 400 or 404 for invalid sellerID, got {resp.status_code}"
 
-# Optional: test deletion via api/2 if available
-@pytest.mark.skip(reason="Удаление опционально, зависит от окружения")
+    resp = requests.get(url, headers=headers, timeout=10)
+    assert resp.status_code in (200, 400, 404), f"Unexpected status code {resp.status_code}"
+
+
+@pytest.mark.skip(reason="Удаление зависит от окружения")
 def test_delete_item_by_id(base_url, headers, created_items):
+    """
+    TC-005: Удаление объявления
+    """
     if not created_items:
         pytest.skip("No created items")
+
     item_id = created_items[0]
     url = f"{base_url}/api/2/item/{item_id}"
-    resp = requests.delete(url, headers={"Accept": "application/json"}, timeout=10)
+
+    resp = requests.delete(url, headers=headers, timeout=10)
     assert resp.status_code == 200
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,29 +1,29 @@
-# AvitoQAInternship
 
-## Описание проекта:
-Проект содержит:
-1.tests/test_api.py- автотесты 
-2.conftest.py
-3.requirements.txt- зависимости
-4.TESTCASE.md- тест-кейсы
-5.BUGS.md - баг-репорты
-
-Требования:
-1.Python 3.8+ version
-2.pip
-
-**Запуск проекта:**
-1.Склонировать проект
-2.Открыть склонированный репозиторий
-3.Создать виртуальное окружение в терминале
-*python -m venv venv*
-4.Установить библиотеки(если не установлены)
-pytest
-requests
-jsonschema  
-uuid
-time
-5.Установить зависимости
-*pip install -r requirements.txt*
-6.Запустить автотесты с помощью команды в терминале
-python -m pytest tests/test_api.py
+## Описание проекта:</br>
+Проект содержит:</br>
+1.tests/test_api.py- автотесты </br>
+2.conftest.py</br>
+3.requirements.txt- зависимости</br>
+4.TESTCASE.md- тест-кейсы</br>
+5.BUGS.md - баг-репорты</br>
+</br>
+Требования:</br>
+1.Python 3.8+ version</br>
+2.pip</br>
+</br>
+**Запуск проекта:**</br>
+1.Склонировать проект</br>
+2.Открыть склонированный репозиторий</br>
+3.Создать виртуальное окружение в терминале</br>
+*python -m venv venv*</br>
+4.Установить библиотеки(если не установлены)</br>
+pytest</br>
+requests</br>
+jsonschema  </br>
+uuid</br>
+time</br>
+</br>
+5.Установить зависимости</br>
+*pip install -r requirements.txt*</br>
+6.Запустить автотесты с помощью команды в терминале</br>
+python -m pytest tests/test_api.py</br>

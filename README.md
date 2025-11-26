@@ -6,6 +6,7 @@
 3.requirements.txt- зависимости</br>
 4.TESTCASE.md- тест-кейсы</br>
 5.BUGS.md - баг-репорты</br>
+6.task1_avito.md- первое задание на составление бег-репорта
 </br>
 Требования:</br>
 1.Python 3.8+ version</br>
